@@ -1,8 +1,13 @@
 import React, { useState, useEffect } from 'react'
-import { Container, Row, Col, Button } from 'reactstrap'
-import { Map, GoogleApiWrapper } from 'google-maps-react'
+import { Button } from 'reactstrap'
+import { Map, GoogleApiWrapper, Marker } from 'google-maps-react'
+import axios from 'axios'
 
 const API_KEY = 'AIzaSyBTCvfE3hwu_n7gzMFX2EVTpHh4TZWDDOs'
+
+const CLOUDFLARE_TRACE = 'https://www.cloudflare.com/cdn-cgi/trace'
+
+const GEO_IP = 'https://freegeoip.app/json/'
 
 const mapStyles = {
   position: 'absolute',
@@ -11,50 +16,58 @@ const mapStyles = {
 }
 
 const MapBox = (props) => {
-  const [position, setPosition] = useState()
+  const [userLocation, setUserLocation] = useState()
+  const [markerPosition, setMarkerPosition] = useState(null)
 
   useEffect(() => {
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        console.log('Latitude is :', position.coords.latitude)
-        console.log('Longitude is :', position.coords.longitude)
-        setPosition(position.coords)
-      },
-      (error) => console.log(error)
-    )
-    // console.log(position)
-  })
+    const estimateLocation = async () => {
+      const cloudflareResponse = await axios.get(CLOUDFLARE_TRACE)
+      const IP = cloudflareResponse.data.split('\n')[2].split('=')[1]
+      const geoIpResponse = await axios.get(`${GEO_IP}${IP}`)
+      const { latitude, longitude } = geoIpResponse.data
+      setUserLocation({ latitude, longitude })
+    }
+    estimateLocation()
+  }, [])
 
-  return (
-    <div
-      style={{
-        display: 'flex',
-        // alignItems: 'bottom',
-        justifyContent: 'center',
-      }}
-    >
-      <Map
-        id="map"
-        name="map"
-        google={props.google}
-        zoom={8}
-        style={mapStyles}
-        initialCenter={
-          position !== undefined
-            ? { lat: position.latitude, lng: position.longitude }
-            : { lat: 0, lng: 0 }
-        }
-      ></Map>
-      <Button
-        id="button-generate"
-        name="button-generate"
-        color="danger"
-        style={{ position: 'absolute', zIndex: '1', bottom: '2%' }}
+  if (!userLocation) {
+    return <div>Loading...</div>
+  } else {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          // alignItems: 'bottom',
+          justifyContent: 'center',
+        }}
       >
-        Click me {position}
-      </Button>
-    </div>
-  )
+        <Map
+          id="map"
+          name="map"
+          google={props.google}
+          zoom={8}
+          initialCenter={{
+            lat: userLocation.latitude,
+            lng: userLocation.longitude,
+          }}
+          style={mapStyles}
+          onCenterChanged={(m, a, p) => {
+            setMarkerPosition(a.getCenter())
+          }}
+        >
+          <Marker position={markerPosition} title={'Chosen point'} />
+        </Map>
+        <Button
+          id="button-generate"
+          name="button-generate"
+          color="danger"
+          style={{ position: 'absolute', zIndex: '1', bottom: '3%' }}
+        >
+          Click me
+        </Button>
+      </div>
+    )
+  }
 }
 
 export default GoogleApiWrapper({
